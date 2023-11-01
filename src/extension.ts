@@ -20,6 +20,8 @@ import { readFileSync, createWriteStream, stat, readdirSync, statSync, writeFile
 import { decode as heDecode } from 'he';
 import { decode } from 'iconv-lite';
 
+import * as fs from 'fs';
+
 let myStatusBarItem: StatusBarItem;
 let channel: OutputChannel;
 
@@ -74,6 +76,8 @@ export function activate(context: ExtensionContext) {
     }));
 
     subscriber.push(commands.registerCommand('project.close', (item: IView) => prjExplorer.closeProject(item.prjID)));
+
+    subscriber.push(commands.registerCommand('project.setEncoding', () => prjExplorer.setEncoding()));
 
     subscriber.push(commands.registerCommand('project.build', (item: IView) => prjExplorer.getTarget(item)?.build()));
 
@@ -537,7 +541,6 @@ abstract class Target implements IView {
     private uv4LogFile: File;
     private uv4LogLockFileWatcher: FileWatcher;
     private isTaskRunning: boolean = false;
-    private taskChannel: OutputChannel | undefined;
 
     constructor(prjInfo: KeilProjectInfo, uvInfo: UVisonInfo, targetDOM: any, rteDom: any) {
         this._event = new EventsEmitter();
@@ -760,6 +763,24 @@ abstract class Target implements IView {
         this.updateSourceRefs();
     }
 
+    private FILE_LINE_LEN = 10 * 1024;
+
+    private lastBytesRead = 0;
+
+    private tail_f(fd: number): string {
+        const buffer = Buffer.alloc(this.FILE_LINE_LEN);
+        let bytesRead = fs.readSync(fd, buffer, 0, this.FILE_LINE_LEN, 0);
+
+        let logString = decode(buffer, 'gb2312');
+
+        // let logString = buffer.toString("utf-8", 0, bytesRead);
+        logString = logString.substring(this.lastBytesRead, bytesRead);
+
+        this.lastBytesRead = bytesRead;
+
+        return logString;
+    }
+
     private runAsyncTask(name: string, type: 'b' | 'r' | 'f' = 'b') {
         if (this.isTaskRunning) {
             window.showWarningMessage(`Task isRuning Please wait it finished try !`);
@@ -768,24 +789,20 @@ abstract class Target implements IView {
         this.isTaskRunning = true;
 
         writeFileSync(this.uv4LogFile.path, '');
-        if (this.taskChannel !== undefined) {
-            this.taskChannel.dispose();
-        }
-        this.taskChannel = window.createOutputChannel("keil Build");
-        this.taskChannel.appendLine(`Start to ${name} target ${this.label}`);
-        this.taskChannel.show();
 
-        const fd = openSync(this.uv4LogFile.path, 'r');
-        const watcher = workspace.createFileSystemWatcher(this.uv4LogFile.path, false, false, false);
-        let curPos = 0;
-        watcher.onDidChange(() => {
-            const stats = statSync(this.uv4LogFile.path);
-            if (stats && stats.size > 0) {
-                const buf = Buffer.alloc(1024);
-                curPos += readSync(fd, buf, 0, 1024, curPos);
-                this.taskChannel?.appendLine(this.dealBuildLog(buf));
+        channel.clear();
+        channel.appendLine(`Start to ${name} target ${this.label}`);
+        channel.show();
+
+        const fd = fs.openSync(this.uv4LogFile.path, "r");
+        const interval = setInterval(() => {
+            let readData = this.tail_f(fd);
+            if (readData != "") {
+                // console.log(readData);
+                const dealedLog = this.dealBuildLog(readData);
+                channel.append(dealedLog);
             }
-        });
+        }, 100);
 
         const execCommand = spawn(`${ResourceManager.getInstance().getKeilUV4Path(this.getKeilPlatform())}`,
             [
@@ -801,17 +818,16 @@ abstract class Target implements IView {
         );
 
         execCommand.on('close', (_code) => {
+            clearInterval(interval);
             this.isTaskRunning = false;
-            this.taskChannel?.appendLine(`Build Finished!`);
             closeSync(fd);
-            watcher.dispose();
             commands.executeCommand('workbench.action.focusActiveEditorGroup');
         });
 
     }
 
-    dealBuildLog(buildLog: Buffer): string {
-        let buildLogStr = decode(buildLog, 'cp936');
+    dealBuildLog(buildLog: string): string {
+        let buildLogStr = buildLog;
         let warningEnd = 0;
         while (true) {
             warningEnd = buildLogStr.indexOf("warning:", warningEnd);
@@ -1920,6 +1936,26 @@ class ProjectExplorer implements TreeDataProvider<IView> {
 
             return nPrj;
         }
+    }
+
+    async setEncoding() {
+        if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+            // 项目根目录
+            const workspace_dir = workspace.workspaceFolders[0].uri.fsPath;
+
+            // .vscode目录路径
+            const vscode_dir = workspace_dir + "\\" + ".vscode";
+            console.log(vscode_dir);
+
+            // 在项目根目录下创建一个.vscode子目录
+            if (!fs.existsSync(vscode_dir))
+                fs.mkdirSync(vscode_dir);
+
+            // 创建.vscode/c_cpp_properties.json文件
+            const c_cpp_properties_file = vscode_dir + "\\" + "settings.json";
+            fs.writeFileSync(c_cpp_properties_file, JSON.stringify({ "files.encoding": "gb2312" }, null, 2), { mode: 0o644 });
+        }
+
     }
 
     async closeProject(pID: string) {

@@ -2,7 +2,7 @@
   "name": "keil-vscode-assistant",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "1.8.6",
+  "version": "1.8.7",
   "publisher": "jacksonjim",
   "icon": "res/icons/icon.png",
   "author": "jacksonjim <jacksonjim@foxmail.com>",
@@ -162,6 +162,10 @@
           "light": "./res/icons/TransferDownload_16x_light.svg",
           "dark": "./res/icons/TransferDownload_16x_dark.svg"
         }
+      },
+      {
+        "command": "project.setEncoding",
+        "title": "%keil-assistant.contributes.commands.project-setEncoding.title%"
       },
       {
         "command": "item.copyValue",

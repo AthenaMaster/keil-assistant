@@ -2,6 +2,11 @@
 
 All notable changes to the "keil-assistant" extension will be documented in this file.
 
+## [v1.8.7]
+- Feature:
+- Add command to set GB2312 encoding
+***
+
 ## [v1.8.6]
 - Fixed:
 - Keil log out show
