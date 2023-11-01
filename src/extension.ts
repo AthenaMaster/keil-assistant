@@ -541,6 +541,7 @@ abstract class Target implements IView {
     private uv4LogFile: File;
     private uv4LogLockFileWatcher: FileWatcher;
     private isTaskRunning: boolean = false;
+    private buildChannel: OutputChannel | undefined;
 
     constructor(prjInfo: KeilProjectInfo, uvInfo: UVisonInfo, targetDOM: any, rteDom: any) {
         this._event = new EventsEmitter();
@@ -792,20 +793,19 @@ abstract class Target implements IView {
 
         writeFileSync(this.uv4LogFile.path, '');
 
-        let buildChannel: OutputChannel | undefined;
 
-        if (buildChannel !== undefined) {
-            buildChannel.dispose();
+        if (this.buildChannel !== undefined) {
+            this.buildChannel.dispose();
         }
-        buildChannel = window.createOutputChannel("keil Build");
-        buildChannel.appendLine(`Start to ${name} target ${this.label}`);
-        buildChannel.show();
+        this.buildChannel = window.createOutputChannel("keil Build");
+        this.buildChannel.appendLine(`Start to ${name} target ${this.label}`);
+        this.buildChannel.show();
 
         const fd = fs.openSync(this.uv4LogFile.path, "r");
         const interval = setInterval(() => {
             let readData = this.tail_f(fd);
             if (readData !== undefined) {
-                buildChannel?.append(this.dealBuildLog(readData));
+                this.buildChannel?.append(this.dealBuildLog(readData));
             }
         }, 100);
 
