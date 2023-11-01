@@ -767,18 +767,20 @@ abstract class Target implements IView {
 
     private lastBytesRead = 0;
 
-    private tail_f(fd: number): string {
+    private tail_f(fd: number): string | undefined {
         const buffer = Buffer.alloc(this.FILE_LINE_LEN);
-        let bytesRead = fs.readSync(fd, buffer, 0, this.FILE_LINE_LEN, 0);
+        const bytesRead = fs.readSync(fd, buffer, 0, this.FILE_LINE_LEN, 0);
+        if (bytesRead !== this.lastBytesRead) {
+            const newBuffer = buffer.slice(this.lastBytesRead, bytesRead)
 
-        let logString = decode(buffer, 'gb2312');
+            let logString = decode(newBuffer, 'gb2312');
+            this.lastBytesRead = bytesRead;
+            return logString;
+        }
+        else {
+            return undefined;
+        }
 
-        // let logString = buffer.toString("utf-8", 0, bytesRead);
-        logString = logString.substring(this.lastBytesRead, bytesRead);
-
-        this.lastBytesRead = bytesRead;
-
-        return logString;
     }
 
     private runAsyncTask(name: string, type: 'b' | 'r' | 'f' = 'b') {
@@ -802,7 +804,7 @@ abstract class Target implements IView {
         const fd = fs.openSync(this.uv4LogFile.path, "r");
         const interval = setInterval(() => {
             let readData = this.tail_f(fd);
-            if (readData != "") {
+            if (readData !== undefined) {
                 buildChannel?.append(this.dealBuildLog(readData));
             }
         }, 100);
