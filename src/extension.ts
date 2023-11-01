@@ -790,17 +790,20 @@ abstract class Target implements IView {
 
         writeFileSync(this.uv4LogFile.path, '');
 
-        channel.clear();
-        channel.appendLine(`Start to ${name} target ${this.label}`);
-        channel.show();
+        let buildChannel: OutputChannel | undefined;
+
+        if (buildChannel !== undefined) {
+            buildChannel.dispose();
+        }
+        buildChannel = window.createOutputChannel("keil Build");
+        buildChannel.appendLine(`Start to ${name} target ${this.label}`);
+        buildChannel.show();
 
         const fd = fs.openSync(this.uv4LogFile.path, "r");
         const interval = setInterval(() => {
             let readData = this.tail_f(fd);
             if (readData != "") {
-                // console.log(readData);
-                const dealedLog = this.dealBuildLog(readData);
-                channel.append(dealedLog);
+                buildChannel?.append(this.dealBuildLog(readData));
             }
         }, 100);
 
